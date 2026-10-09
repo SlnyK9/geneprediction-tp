@@ -5,6 +5,8 @@ import csv
 import re
 from re import Pattern
 from pathlib import Path
+import textwrap
+from textwrap import fill
 from typing import List, Union
 
 
@@ -230,30 +232,65 @@ def reverse_complement(sequence: str) -> str:
 #==============================================================
 # Main program
 #==============================================================
-def main() -> None: # pragma: no cover
+def main() -> None:  # pragma: no cover
     """
     Main program function
     """
-    # Gene detection over genome involves to consider a thymine instead of
-    # an uracile that we would find on the expressed RNA
-    #start_codons = ['TTG', 'CTG', 'ATT', 'ATG', 'GTG']
-    #stop_codons = ['TAA', 'TAG', 'TGA']
     start_regex = re.compile('AT[TG]|[ATCG]TG')
     stop_regex = re.compile('TA[GA]|TGA')
-    # Shine AGGAGGUAA
-    #AGGA ou GGAGG 
     shine_regex = re.compile('A?G?GAGG|GGAG|GG.{1}GG')
-    # Arguments
+
     args = get_arguments()
-    # Let us do magic in 5' to 3'
-    
-    # Don't forget to uncomment !!!
-    # Call these function in the order that you want
-    # We reverse and complement
-    #sequence_rc = reverse_complement(sequence)
-    # Call to output functions
-    #write_genes_pos(args.predicted_genes_file, probable_genes)
-    #write_genes(args.fasta_file, sequence, probable_genes, sequence_rc, probable_genes_comp)
+
+    # Lire le génome
+    sequence = read_fasta(args.genome_file)
+
+    # Prédire les gènes sur le brin original
+    probable_genes = predict_genes(
+        sequence,
+        start_regex,
+        stop_regex,
+        shine_regex,
+        args.min_gene_len,
+        args.max_shine_dalgarno_distance,
+        args.min_gap
+    )
+
+    # Calculer le complément inverse
+    sequence_rc = reverse_complement(sequence)
+
+    # Prédire les gènes sur le complément inverse
+    probable_genes_comp = predict_genes(
+        sequence_rc,
+        start_regex,
+        stop_regex,
+        shine_regex,
+        args.min_gene_len,
+        args.max_shine_dalgarno_distance,
+        args.min_gap
+    )
+
+    # Convertir les coordonnées du brin inverse vers le génome original
+    longueur_genome = len(sequence)
+    genes_comp_corriges = [
+        [longueur_genome - stop + 1, longueur_genome - start + 1]
+        for start, stop in probable_genes_comp
+    ]
+
+    # Combiner et trier les positions des deux brins
+    all_genes = sorted(probable_genes + genes_comp_corriges)
+
+    # Écrire les positions prédites
+    write_genes_pos(args.predicted_genes_file, all_genes)
+
+    # Écrire les séquences des gènes au format FASTA
+    write_genes(
+        args.fasta_file,
+        sequence,
+        probable_genes,
+        sequence_rc,
+        probable_genes_comp
+    )
 
 
 
