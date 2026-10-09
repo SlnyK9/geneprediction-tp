@@ -3,10 +3,9 @@ import sys
 import os
 import csv
 import re
-import textwrap
 from re import Pattern
 from pathlib import Path
-from typing import List, Union, Optional
+from typing import List, Union
 
 
 def isfile(path: str) -> Path:  # pragma: no cover
@@ -55,21 +54,20 @@ def get_arguments(): # pragma: no cover
     return parser.parse_args()
 
 
-
 def read_fasta(fasta_file: Path) -> str:
     """Extract genome sequence from fasta files.
 
     :param fasta_file: (Path) Path to the fasta file.
-    :return: (str) Sequence from the genome. 
+    :return: (str) Sequence from the genome.
     """
     sequence = ""
     with open(fasta_file, "r") as fasta:
-    	for line in fasta:
-    		line = line.strip()
-    		
-    		if not line.startswith(">"):
-    			sequence += line
-    			
+        for line in fasta:
+            line = line.strip()
+
+            if not line.startswith(">"):
+                sequence += line
+
     return sequence.upper()
 
 
@@ -120,23 +118,63 @@ def has_shine_dalgarno(shine_regex: Pattern, sequence: str, start: int, max_shin
     :param max_shine_dalgarno_distance: (int) Maximum distance of the shine dalgarno to the start position
     :return: (boolean) true -> has a shine dalgarno upstream to the gene, false -> no
     """
-    pass
+
+    search_start = start - max_shine_dalgarno_distance
+    search_stop = start - 6
+
+    if search_start < 0:
+        return False
+
+    if search_stop <= search_start:
+        return False
+
+    match = shine_regex.search(sequence, search_start, search_stop)
+    return match is not None
 
 
-def predict_genes(sequence: str, start_regex: Pattern, stop_regex: Pattern, shine_regex: Pattern, 
+def predict_genes(sequence: str, start_regex: Pattern, stop_regex: Pattern, shine_regex: Pattern,
                   min_gene_len: int, max_shine_dalgarno_distance: int, min_gap: int) -> List:
-    """Predict most probable genes
+    """Predict most probable genes."""
+    genes_predits = []
+    position_courante = 0
+    longueur_genome = len(sequence)
 
-    :param sequence: (str) Sequence from the genome.
-    :param start_regexp: A regex object that identifies a start codon.
-    :param stop_regexp: A regex object that identifies a stop codon.
-    :param shine_regexp: A regex object that identifies a shine-dalgarno motif.
-    :param min_gene_len: (int) Minimum gene length.
-    :param max_shine_dalgarno_distance: (int) Maximum distance of the shine dalgarno to the start position.
-    :param min_gap: (int) Minimum distance between two genes.
-    :return: (list) List of [start, stop] position of each predicted genes.
-    """
-    pass
+    while longueur_genome - position_courante >= min_gap:
+        position_start = find_start(
+            start_regex, sequence, position_courante, longueur_genome
+        )
+
+        if position_start is None:
+            break
+
+        position_stop = find_stop(stop_regex, sequence, position_start)
+
+        if position_stop is not None:
+            longueur_gene = position_stop + 3 - position_start
+
+            if longueur_gene >= min_gene_len:
+                shine_present = has_shine_dalgarno(
+                    shine_regex,
+                    sequence,
+                    position_start,
+                    max_shine_dalgarno_distance
+                )
+
+                if shine_present:
+                    # Positions du TP : debut et fin inclusifs, a partir de 1
+                    genes_predits.append([
+                        position_start + 1,
+                        position_stop + 3
+                    ])
+                    position_courante = position_stop + 3 + min_gap
+                else:
+                    position_courante = position_start + 1
+            else:
+                position_courante = position_start + 1
+        else:
+            position_courante = position_start + 1
+
+    return genes_predits
 
 
 def write_genes_pos(predicted_genes_file: Path, probable_genes: List[List[int]]) -> None:
